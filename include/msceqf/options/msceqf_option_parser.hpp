@@ -129,7 +129,7 @@ class OptionParser
     {
       using vector = std::vector<fp>;
       vector vec = node_[param].as<vector>();
-      q = Quaternion(vec).normalize();
+      q = Quaternion(vec.data()).normalized();
       utils::Logger::info("Parameter: [" + param + "] found. Option set to: \n" +
                           static_cast<std::ostringstream&>(std::ostringstream() << q).str());
       return true;
