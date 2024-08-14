@@ -270,6 +270,7 @@ TEST(SystemStateTest, SystemStateConstructionTest)
           SystemState state(opts.state_options_,
                             std::make_pair(SystemStateElementName::T, createSystemStateElement<ExtendedPoseState>(
                                                                           std::make_tuple(Quaternion::UnitRandom()))));
+          auto state_copy = state; // To ensure that the state is not optimized away
         },
         "");
   }
