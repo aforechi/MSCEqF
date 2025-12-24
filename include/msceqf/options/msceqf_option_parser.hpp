@@ -93,17 +93,17 @@ namespace msceqf
         if constexpr (Rows == 1)
         {
           utils::Logger::info("Parameter: [" + param + "] found. Option set to:" +
-                              (std::ostringstream{} << x).str());
+                              paramToString(x));
         }
         else if (Cols == 1)
         {
           utils::Logger::info("Parameter: [" + param + "] found. Option set to: " +
-                              (std::ostringstream{} << x.transpose()).str());
+                              paramToString(x.transpose()));
         }
         else
         {
           utils::Logger::info("Parameter: [" + param + "] found. Option set to: \n" +
-                              (std::ostringstream{} << x).str());
+                              paramToString(x));
         }
 
         return true;
@@ -131,7 +131,7 @@ namespace msceqf
         vector vec = node_[param].as<vector>();
         q = Quaternion(vec.data()).normalized();
         utils::Logger::info("Parameter: [" + param + "] found. Option set to: \n" +
-                            static_cast<std::ostringstream&>(std::ostringstream() << q).str());
+                            paramToString(q));
         return true;
       }
       utils::Logger::warn("Parameter: [" + param + "] not found");
@@ -153,7 +153,7 @@ namespace msceqf
       {
         p = node_[param].as<T>();
         utils::Logger::info("Parameter: [" + param + "] found. Option set to: " +
-                            (std::ostringstream{} << p).str());
+                            paramToString(p));
         return true;
       }
       utils::Logger::warn("Parameter: [" + param + "] not found");
@@ -168,7 +168,7 @@ namespace msceqf
       {
         p = def;
         utils::Logger::warn("Parameter: [" + param + "] set to default value: " +
-                            (std::ostringstream{} << p).str());
+                            paramToString(p));
       }
     }
 
@@ -270,6 +270,14 @@ namespace msceqf
 
     YAML::Node node_;      //!< YAML node
     std::string filepath_; //!< filepath
+
+    template <typename T>
+    std::string paramToString(const T &val)
+    {
+      std::ostringstream oss;
+      oss << val;
+      return oss.str();
+    }
   };
 
 } // namespace msceqf
