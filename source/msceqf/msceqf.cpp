@@ -263,6 +263,7 @@ void MSCEqF::initialize(Camera& cam)
   {
     if (initializer_.initializeOrigin())
     {
+      track_manager_.clear();
       setGivenOrigin(initializer_.T0(), initializer_.b0(), cam.timestamp_);
     }
   }
@@ -292,6 +293,7 @@ void MSCEqF::initialize(TriangulatedFeatures& features)
   {
     if (initializer_.initializeOrigin())
     {
+      track_manager_.clear();
       setGivenOrigin(initializer_.T0(), initializer_.b0(), features.timestamp_);
     }
   }
