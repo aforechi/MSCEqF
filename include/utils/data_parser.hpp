@@ -206,7 +206,6 @@ class dataParser
       throw std::runtime_error("Wrong number of groundtruth header titles. Exit programm.");
     }
 
-    int rows_cnt = 0;
     if (gtfile.good())
     {
       std::getline(gtfile, line);
@@ -217,7 +216,6 @@ class dataParser
         std::vector<msceqf::fp> tmp;
         parseLine(line, tmp, regex);
         data.emplace_back(tmp);
-        ++rows_cnt;
       }
 
       if (!getIndices(header, groundtruth_header_titles_, groundtruth_indices))
@@ -282,7 +280,6 @@ class dataParser
     std::vector<std::vector<msceqf::fp>> data;
     std::vector<int> imu_indices;
 
-    int rows_cnt = 0;
     if (imufile.good())
     {
       std::getline(imufile, line);
@@ -293,7 +290,6 @@ class dataParser
         std::vector<msceqf::fp> tmp;
         parseLine(line, tmp, regex);
         data.emplace_back(tmp);
-        ++rows_cnt;
       }
 
       if (!getIndices(header, imu_header_titles_, imu_indices))
@@ -337,7 +333,6 @@ class dataParser
     std::vector<std::vector<std::string>> data;
     std::vector<int> image_indices;
 
-    int rows_cnt = 0;
     if (imgfile.good())
     {
       std::getline(imgfile, line);
@@ -348,7 +343,6 @@ class dataParser
         std::vector<std::string> tmp;
         parseLine(line, tmp);
         data.emplace_back(tmp);
-        ++rows_cnt;
       }
 
       if (!getIndices(header, image_header_titles_, image_indices))

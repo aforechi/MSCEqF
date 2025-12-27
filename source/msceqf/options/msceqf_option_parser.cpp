@@ -283,7 +283,7 @@ void OptionParser::parseGivenOrigin(SE23& T0, Vector6& b0, fp& t0)
     Vector4 q;
     Vector3 p;
     Vector3 v;
-    if (!read(q, "q0") & !read(p, "p0") & !read(v, "v0"))
+    if (!read(q, "q0") && !read(p, "p0") && !read(v, "v0"))
     {
       throw std::runtime_error("Wrong or missing initial T0 or q0, v0, p0.");
     }

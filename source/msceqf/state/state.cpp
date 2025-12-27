@@ -248,19 +248,19 @@ void MSCEqFState::initializeStateElement(const MSCEqFStateKey& key, const Matrix
     switch (std::get<MSCEqFStateElementName>(key))
     {
       case MSCEqFStateElementName::Dd:
-        success = insertStateElement(key, std::move(createMSCEqFStateElement<MSCEqFSDBState>(idx)));
+        success = insertStateElement(key, createMSCEqFStateElement<MSCEqFSDBState>(idx));
         break;
       case MSCEqFStateElementName::E:
-        success = insertStateElement(key, std::move(createMSCEqFStateElement<MSCEqFSE3State>(idx)));
+        success = insertStateElement(key, createMSCEqFStateElement<MSCEqFSE3State>(idx));
         break;
       case MSCEqFStateElementName::L:
-        success = insertStateElement(key, std::move(createMSCEqFStateElement<MSCEqFInState>(idx)));
+        success = insertStateElement(key, createMSCEqFStateElement<MSCEqFInState>(idx));
         break;
     }
   }
   else
   {
-    success = insertStateElement(std::get<uint>(key), std::move(createMSCEqFStateElement<MSCEqFSOT3State>(idx)));
+    success = insertStateElement(std::get<uint>(key), createMSCEqFStateElement<MSCEqFSOT3State>(idx));
   }
 
   if (success)
