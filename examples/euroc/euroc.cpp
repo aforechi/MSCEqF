@@ -22,6 +22,8 @@ int main(int argc, char** argv)
     return 1;
   }
 
+  cv::setRNGSeed(42);
+
   const std::string dataset_name = argv[1];
   const std::string dataset_path = std::string(argv[2]) + "/" + dataset_name;
   const std::string results_path = std::string(argv[3]) + "/results/" + dataset_name + ".csv";
