@@ -32,8 +32,8 @@ It is based on the recent advances in equivaraint inertial navigation systems [[
  - [x] ROS1 wrapper
  - [x] ROS2 wrapper
  - [x] Equivariant Zero velocity Update (EqZVU)
- - [ ] Unit-sphere projection method support
- - [ ] Equivariant Persistent (SLAM) features update support
+ - [x] Unit-sphere projection method support
+ - [x] Equivariant Persistent (SLAM) features update support
 
 ## Documentation
 
@@ -57,19 +57,18 @@ $ git clone https://github.com/aau-cns/MSCEqF.git msceqf
 $ cd msceqf
 $ export BUILD_TYPE=<TYPE>  # Replace <TYPE> with one of these: Release, Debug, RelWithDebInfo, ...
 $ mkdir -p build/$BUILD_TYPE
-$ cd build/$BUILD_TYPE && cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILD_TESTS=ON ../..
-$ cmake --build . --config $BUILD_TYPE --target all -j && cd ../..
+$ cmake -S . -B build/$BUILD_TYPE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DMSCEQF_TESTS=ON
+$ cmake --build build/$BUILD_TYPE --config $BUILD_TYPE --target all -j
 ```
 
 ### Run tests
 ```sh
-$ cd msceqf/build/$BUILD_TYPE
-$ ./msceqf_tests
+$ ./build/$BUILD_TYPE/msceqf_tests
 ```
 
 ### Run example (Euroc)
 
-After downloading the [Euroc](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) follows
+After downloading the [Euroc](https://projects.asl.ethz.ch/datasets/euroc-mav) follows
 
 ```sh
 $ cd msceqf/build/$BUILD_TYPE
@@ -106,7 +105,7 @@ $ xhost +
 $ docker run --net=host -it --gpus all --env="NVIDIA_DRIVER_CAPABILITIES=all" --env="DISPLAY" --env="QT_X11_NO_MITSHM=1" --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" msceqf:ros$ROS_VERSION .
 ```
 
-If Nvidia drivere are not supported, simply run docker as follows
+If Nvidia drivers are not supported, simply run docker as follows
 
 ```sh
 $ docker run --net=host -it --gpus all --env="NVIDIA_DRIVER_CAPABILITIES=all" --env="DISPLAY" --env="QT_X11_NO_MITSHM=1" --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" msceqf:ros$ROS_VERSION .
