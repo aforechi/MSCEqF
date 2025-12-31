@@ -15,6 +15,7 @@
 #include <ros/ros.h>
 #include <Eigen/Eigen>
 #include <atomic>
+#include <mutex>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/CameraInfo.h>
@@ -99,6 +100,7 @@ class MSCEqFRos
 
   std::deque<msceqf::Camera> cams_;       //!< Camera measurements
   std::mutex mutex_;                      //!< Camera measurements mutex
+  std::mutex sys_mutex_;                  //!< System mutex
   std::atomic<bool> processing_ = false;  //!< Camera measurements processing flag
 
   bool record_;      //!< Record flag

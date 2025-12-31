@@ -11,6 +11,7 @@
 
 #include <ros/ros.h>
 #include <Eigen/Eigen>
+#include <thread>
 
 #include "msceqf_ros.hpp"
 #include "utils/logger.hpp"
@@ -91,7 +92,10 @@ void MSCEqFRos::callback_imu(const sensor_msgs::Imu::ConstPtr &msg)
   imu.ang_ << msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z;
   imu.acc_ << msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z;
 
-  sys_.processMeasurement(imu);
+  {
+    std::lock_guard<std::mutex> lock(sys_mutex_);
+    sys_.processMeasurement(imu);
+  }
 
   if (!processing_)
   {
@@ -101,8 +105,11 @@ void MSCEqFRos::callback_imu(const sensor_msgs::Imu::ConstPtr &msg)
         std::lock_guard<std::mutex> lock(mutex_);
         while (!cams_.empty() && cams_.front().timestamp_ < timestamp)
         {
-          sys_.processMeasurement(cams_.front());
-          publish(cams_.front());
+          {
+            std::lock_guard<std::mutex> sys_lock(sys_mutex_);
+            sys_.processMeasurement(cams_.front());
+            publish(cams_.front());
+          }
           cams_.pop_front();
         }
       }
