@@ -321,6 +321,21 @@ void MSCEqFState::stochasticCloning(const fp& timestamp)
   }
 }
 
+bool MSCEqFState::hasStateElement(const MSCEqFStateKey& key) const
+{
+  return state_.find(key) != state_.end();
+}
+
+size_t MSCEqFState::getNumPersistentFeatures() const
+{
+  size_t non_feature_elements = 2;
+  if (opts_.enable_camera_intrinsics_calibration_)
+  {
+    non_feature_elements++;
+  }
+  return state_.size() - non_feature_elements;
+}
+
 void MSCEqFState::marginalizeCloneAt(const fp& timestamp)
 {
   const auto& clone_to_remove = clones_.at(timestamp);

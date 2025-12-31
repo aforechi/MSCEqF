@@ -44,15 +44,123 @@ MatrixX ProjectionHelperZ1::dpi(const Vector3& f)
   return (Matrix<2, 3>() << 1.0 / f(2), 0.0, -f(0) / (f(2) * f(2)), 0.0, 1.0 / f(2), -f(1) / (f(2) * f(2))).finished();
 }
 
-void ProjectionHelperS2::residualJacobianBlock([[maybe_unused]] const MSCEqFState& X,
+void ProjectionHelperS2::residualJacobianBlock(const MSCEqFState& X,
                                                [[maybe_unused]] const SystemState& xi0,
-                                               [[maybe_unused]] const FeatHelper& feat,
-                                               [[maybe_unused]] MatrixXBlockRowRef C_block_row,
-                                               [[maybe_unused]] VectorXBlockRowRef delta_block_row,
-                                               [[maybe_unused]] MatrixXBlockRowRef Cf_block_row,
-                                               [[maybe_unused]] const ColsMap& cols_map)
+                                               const FeatHelper& feat,
+                                               MatrixXBlockRowRef C_block_row,
+                                               VectorXBlockRowRef delta_block_row,
+                                               MatrixXBlockRowRef Cf_block_row,
+                                               const ColsMap& cols_map)
 {
-  throw std::runtime_error("Update with S2 projection not implemented yet");
+  const auto& anchor_E = X.clone(feat.anchor_timestamp_);
+  const auto& clone_E = X.clone(feat.clone_timestamp_);
+
+  // feature in origin frame and camera frame
+  Vector3 G0_f = anchor_E * feat.A_f_;
+  Vector3 C_f = clone_E.inv() * G0_f;
+
+  Matrix3 D = dpi(C_f);
+
+  Vector3 P = pi(C_f);
+
+  // Precompute A = [wedge(G0_f) -I]
+  Matrix<3, 6> A = Matrix<3, 6>::Zero();
+  A.block<3, 3>(0, 0) = SO3::wedge(G0_f);
+  A.block<3, 3>(0, 3) = -Matrix3::Identity();
+
+  if (feat.clone_timestamp_ != feat.anchor_timestamp_)
+  {
+    C_block_row.block(0, cols_map.at(feat.clone_timestamp_), block_rows_, X.dof(feat.clone_timestamp_)).noalias() =
+        D * clone_E.R().transpose() * A;
+    C_block_row.block(0, cols_map.at(feat.anchor_timestamp_), block_rows_, X.dof(feat.anchor_timestamp_)) =
+        -C_block_row.block(0, cols_map.at(feat.clone_timestamp_), block_rows_, X.dof(feat.clone_timestamp_));
+  }
+
+  switch (feature_representation_)
+  {
+    case FeatureRepresentation::ANCHORED_EUCLIDEAN:
+      Cf_block_row = D * clone_E.R().transpose() * anchor_E.R();
+      break;
+    case FeatureRepresentation::ANCHORED_INVERSE_DEPTH:
+      Cf_block_row = D * clone_E.R().transpose() * anchor_E.R() * UpdaterHelper::inverseDepthJacobian(feat.A_f_);
+      break;
+    case FeatureRepresentation::ANCHORED_POLAR:
+      Vector3 A_f0 = (Vector3() << 0.0, 0.0, 1.0).finished();
+      Vector3 thetak =
+          std::acos((A_f0.normalized().transpose() * feat.A_f_.normalized())) * A_f0.cross(feat.A_f_).normalized();
+      Matrix<3, 4> J = Matrix<3, 4>::Zero();
+      J.block<3, 3>(0, 0) = SO3::wedge(feat.A_f_) * SO3::leftJacobian(thetak);
+      J.block<3, 1>(0, 3) = -feat.A_f_;
+      Cf_block_row = D * clone_E.R().transpose() * anchor_E.R() * J;
+      break;
+  }
+
+  // Reconstruct unit vector measurement from normalized coordinates
+  Vector3 measurement;
+  measurement << feat.uvn_, 1.0;
+  measurement.normalize();
+  delta_block_row = measurement - P;
+}
+
+void ProjectionHelperS2::slamJacobianBlock(const MSCEqFState& X,
+                                           const SystemState& xi0,
+                                           const FeatHelper& feat,
+                                           const uint& feat_id,
+                                           MatrixXBlockRowRef C_block_row,
+                                           VectorXBlockRowRef delta_block_row,
+                                           const ColsMap& cols_map)
+{
+  const auto& clone_E = X.clone(feat.clone_timestamp_);
+  const auto& Q = X.Q(feat_id);
+
+  // Calculate f0_cam (feature in origin camera frame)
+  SE3 PS0 = xi0.P();
+  if (X.opts().num_persistent_features_ > 0)
+  {
+    PS0.multiplyRight(xi0.S());
+  }
+  Vector3 f0_cam = PS0.inv() * xi0.f(feat_id);
+
+  // Calculate global feature and camera feature
+  Vector3 f_global = Q.inv() * f0_cam;
+  Vector3 f_cam = clone_E.inv() * f_global;
+
+  Matrix3 D = dpi(f_cam);
+
+  Vector3 P = pi(f_cam);
+
+  // Pose Jacobian (Clone) (Columns for timestamp)
+  // J_pose = D * clone_E.R().transpose() * [wedge(f_global), -I]
+  Matrix<3, 6> A = Matrix<3, 6>::Zero();
+  A.block<3, 3>(0, 0) = SO3::wedge(f_global);
+  A.block<3, 3>(0, 3) = -Matrix3::Identity();
+
+  C_block_row.block(0, cols_map.at(feat.clone_timestamp_), block_rows_, X.dof(feat.clone_timestamp_)).noalias() =
+      D * clone_E.R().transpose() * A;
+
+  // Feature Jacobian (Q) (Columns for feat_id)
+  // M = [-wedge(f0_cam), f0_cam]
+  Matrix<3, 4> M;
+  M.block<3, 3>(0, 0) = -SO3::wedge(f0_cam);
+  M.col(3) = f0_cam;
+
+  // Apply Q.inv() to each column to get J_global part
+  Matrix<3, 4> J_global;
+  for (int i = 0; i < 4; ++i)
+  {
+    J_global.col(i) = Q.inv() * Vector3(M.col(i));
+  }
+
+  // J_Q = D * E^T * (- J_global) = - D * E^T * J_global
+  MSCEqFState::MSCEqFStateKey key(feat_id);
+  C_block_row.block(0, cols_map.at(key), block_rows_, X.dof(key)).noalias() =
+      -D * clone_E.R().transpose() * J_global;
+
+  // Residual
+  Vector3 measurement;
+  measurement << feat.uvn_, 1.0;
+  measurement.normalize();
+  delta_block_row = measurement - P;
 }
 
 void ProjectionHelperZ1::residualJacobianBlock(const MSCEqFState& X,
@@ -116,6 +224,79 @@ void ProjectionHelperZ1::residualJacobianBlock(const MSCEqFState& X,
       break;
   }
 
+  if (X.opts().enable_camera_intrinsics_calibration_)
+  {
+    delta_block_row = feat.uv_ - (xi0.K().asMatrix() * P).segment<2>(0);
+  }
+  else
+  {
+    delta_block_row = feat.uvn_ - P.segment<2>(0);
+  }
+}
+
+void ProjectionHelperZ1::slamJacobianBlock(const MSCEqFState& X,
+                                           const SystemState& xi0,
+                                           const FeatHelper& feat,
+                                           const uint& feat_id,
+                                           MatrixXBlockRowRef C_block_row,
+                                           VectorXBlockRowRef delta_block_row,
+                                           const ColsMap& cols_map)
+{
+  const auto& clone_E = X.clone(feat.clone_timestamp_);
+  const auto& Q = X.Q(feat_id);
+
+  // Calculate f0_cam (feature in origin camera frame)
+  SE3 PS0 = xi0.P();
+  if (X.opts().num_persistent_features_ > 0)
+  {
+    PS0.multiplyRight(xi0.S());
+  }
+  Vector3 f0_cam = PS0.inv() * xi0.f(feat_id);
+
+  // Calculate global feature and camera feature
+  Vector3 f_global = Q.inv() * f0_cam;
+  Vector3 f_cam = clone_E.inv() * f_global;
+
+  // precompute D = K0 * L * dpi(C_f) if intrinsics are calibrated, D = dpi(C_f) otherwise
+  Matrix<2, 3> D = X.opts().enable_camera_intrinsics_calibration_ ?
+                       (xi0.K() * X.L()).asMatrix().block<2, 2>(0, 0) * dpi(f_cam) :
+                       dpi(f_cam);
+
+  // Precompute P = L * pi(C_f) if intrinsics are calibrated, P = pi(C_f) otherwise
+  Vector3 P = X.opts().enable_camera_intrinsics_calibration_ ? X.L().asMatrix() * pi(f_cam) : pi(f_cam);
+
+  // Pose Jacobian (Clone)
+  Matrix<3, 6> A = Matrix<3, 6>::Zero();
+  A.block<3, 3>(0, 0) = SO3::wedge(f_global);
+  A.block<3, 3>(0, 3) = -Matrix3::Identity();
+
+  C_block_row.block(0, cols_map.at(feat.clone_timestamp_), block_rows_, X.dof(feat.clone_timestamp_)).noalias() =
+      D * clone_E.R().transpose() * A;
+
+  // Feature Jacobian (Q)
+  Matrix<3, 4> M;
+  M.block<3, 3>(0, 0) = -SO3::wedge(f0_cam);
+  M.col(3) = f0_cam;
+
+  Matrix<3, 4> J_global;
+  for (int i = 0; i < 4; ++i)
+  {
+    J_global.col(i) = Q.inv() * Vector3(M.col(i));
+  }
+
+  // J_Q = D * E^T * (- J_global) = - D * E^T * J_global
+  MSCEqFState::MSCEqFStateKey key(feat_id);
+  C_block_row.block(0, cols_map.at(key), block_rows_, X.dof(key)).noalias() =
+      -D * clone_E.R().transpose() * J_global;
+
+  // Intrinsics Jacobian
+  if (X.opts().enable_camera_intrinsics_calibration_)
+  {
+     C_block_row.block(0, cols_map.at(MSCEqFStateElementName::L), block_rows_, X.dof(MSCEqFStateElementName::L))
+        .noalias() = xi0.K().asMatrix().block<2, 2>(0, 0) * UpdaterHelper::Xi(P);
+  }
+
+  // Residual
   if (X.opts().enable_camera_intrinsics_calibration_)
   {
     delta_block_row = feat.uv_ - (xi0.K().asMatrix() * P).segment<2>(0);

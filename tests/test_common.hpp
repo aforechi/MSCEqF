@@ -15,6 +15,8 @@
 #ifndef TEST_COMMON_HPP
 #define TEST_COMMON_HPP
 
+#include <filesystem>
+
 #include <gtest/gtest.h>
 
 #include <Eigen/Dense>
@@ -23,7 +25,7 @@
 
 namespace msceqf
 {
-const std::string parameters_path = "../../tests/config/parameters.yaml";
+const std::string parameters_path = (std::filesystem::path(__FILE__).parent_path() / "config/parameters.yaml").string();
 
 constexpr fp EPS = 1e-6;
 constexpr int N_TESTS = 100;

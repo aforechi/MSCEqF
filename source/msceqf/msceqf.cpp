@@ -117,7 +117,63 @@ void MSCEqF::processCameraMeasurement(Camera& cam)
     future_cloning.wait();
   }
 
+  // Persistent Features Management
+  std::unordered_set<uint> features_to_update;
+  std::unordered_set<uint> candidates;
+
+  for (const auto& [id, track] : track_manager_.tracks())
+  {
+    if (X_.hasStateElement(id))
+    {
+      features_to_update.insert(id);
+    }
+    else
+    {
+      if (track.size() >= opts_.updater_options_.min_track_lenght_)
+      {
+        candidates.insert(id);
+      }
+    }
+  }
+
+  if (X_.getNumPersistentFeatures() < opts_.state_options_.num_persistent_features_ && !candidates.empty())
+  {
+    size_t available_slots = opts_.state_options_.num_persistent_features_ - X_.getNumPersistentFeatures();
+    std::unordered_set<uint> limited_candidates;
+    size_t count = 0;
+    for (auto id : candidates)
+    {
+      limited_candidates.insert(id);
+      count++;
+      if (count >= available_slots)
+      {
+        break;
+      }
+    }
+
+    std::unordered_set<uint> promoted =
+        updater_.initializePersistentFeatures(X_, xi0_, track_manager_.tracks(), limited_candidates);
+    for (const auto& id : promoted)
+    {
+      features_to_update.insert(id);
+    }
+  }
+
+  updater_.slamUpdate(X_, track_manager_.tracks(), features_to_update);
+
   track_manager_.lostTracksIds(cam.timestamp_, ids_to_update_);
+
+  for (auto it = ids_to_update_.begin(); it != ids_to_update_.end();)
+  {
+    if (X_.hasStateElement(*it))
+    {
+      it = ids_to_update_.erase(it);
+    }
+    else
+    {
+      ++it;
+    }
+  }
 
   bool marginalize = false;
   fp marginalize_timestamp = -1;

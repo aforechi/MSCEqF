@@ -44,6 +44,27 @@ class Updater
    */
   void mscUpdate(MSCEqFState& X, const Tracks& tracks, std::unordered_set<uint>& ids);
 
+  /**
+   * @brief Perform a SLAM update for persistent features
+   *
+   * @param X MSCEqF state
+   * @param tracks Tracks to update
+   * @param ids Indices of the persistent features that are evaluated for an update
+   */
+  void slamUpdate(MSCEqFState& X, const Tracks& tracks, std::unordered_set<uint>& ids);
+
+  /**
+   * @brief Try to initialize persistent features from candidate tracks
+   *
+   * @param X MSCEqF state
+   * @param xi0 System state origin (mutable to add features)
+   * @param tracks Tracks
+   * @param candidate_ids Candidate ids to initialize
+   * @return Set of initialized features
+   */
+  std::unordered_set<uint> initializePersistentFeatures(MSCEqFState& X, SystemState& xi0, const Tracks& tracks,
+                                                        const std::unordered_set<uint>& candidate_ids);
+
  private:
   /**
    * @brief Linear feature triangulation (DLT). This triangulates the given features using all the views the features is

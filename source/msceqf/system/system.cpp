@@ -145,6 +145,12 @@ const Vector3& SystemState::f(const uint& feat_id) const
 
 const Vector3 SystemState::ge3() const { return opts_.gravity_ * Vector3(0, 0, -1); }
 
+void SystemState::addFeature(const uint& feat_id, const Vector3& feat_pos)
+{
+  insertSystemStateElement(
+      std::make_pair(feat_id, createSystemStateElement<FeatureState>(std::make_tuple(feat_pos))));
+}
+
 std::string SystemState::toString(const SystemStateKey& key)
 {
   std::string name;

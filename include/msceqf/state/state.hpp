@@ -229,6 +229,21 @@ class MSCEqFState
   void stochasticCloning(const fp& timestamp);
 
   /**
+   * @brief Check if the state contains the element with the given key
+   *
+   * @param key State element name or feature id
+   * @return true if the state contains the element, false otherwise
+   */
+  [[nodiscard]] bool hasStateElement(const MSCEqFStateKey& key) const;
+
+  /**
+   * @brief Get the number of persistent features in the state
+   *
+   * @return Number of persistent features
+   */
+  [[nodiscard]] size_t getNumPersistentFeatures() const;
+
+  /**
    * @brief Marginalize out clone at a given timestamp
    *
    * @param timestamp Timestamp of the clone to marginalize

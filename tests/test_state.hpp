@@ -336,6 +336,24 @@ TEST(MSCEqFStateTest, MSCEqFStateConstructionTest)
       MSCEqFState state_copy_2 = state;
       MSCEqFStateEquality(state, state_copy_2);
     }
+
+    // Dynamic Feature Initialization
+    {
+      SystemState xi0(opts.state_options_);
+      MSCEqFState state(opts.state_options_, xi0);
+
+      uint feat_id = utils::random<int>(0, 1000);
+
+      EXPECT_FALSE(state.hasStateElement(feat_id));
+      EXPECT_EQ(state.getNumPersistentFeatures(), 0);
+
+      Matrix4 cov = Matrix4::Identity();
+      state.initializeStateElement(feat_id, cov);
+
+      EXPECT_TRUE(state.hasStateElement(feat_id));
+      EXPECT_EQ(state.getNumPersistentFeatures(), 1);
+      EXPECT_EQ(state.dof(feat_id), 4);
+    }
   }
 }
 

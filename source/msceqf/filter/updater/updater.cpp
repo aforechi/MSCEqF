@@ -197,6 +197,214 @@ void Updater::mscUpdate(MSCEqFState& X, const Tracks& tracks, std::unordered_set
   UpdateMSCEqF(X, C, delta, R);
 }
 
+void Updater::slamUpdate(MSCEqFState& X, const Tracks& tracks, std::unordered_set<uint>& ids)
+{
+  if (ids.empty())
+  {
+    return;
+  }
+
+  // Identify common timestamp
+  fp current_timestamp = -1.0;
+  for (const auto& id : ids)
+  {
+    if (tracks.count(id))
+    {
+      current_timestamp = tracks.at(id).timestamps_.back();
+      break;
+    }
+  }
+  if (current_timestamp < 0)
+  {
+    return;
+  }
+
+  // Build cols_map
+  cols_map_.clear();
+  size_t cols = 0;
+
+  if (X.opts().enable_camera_intrinsics_calibration_)
+  {
+    cols_map_.insert(MSCEqFStateElementName::L, cols);
+    cols += X.dof(MSCEqFStateElementName::L);
+  }
+
+  // Clone at current timestamp
+  try
+  {
+    (void)X.clone(current_timestamp);
+  }
+  catch (...)
+  {
+    utils::Logger::warn("Clone not found for SLAM update");
+    return;
+  }
+  cols_map_.insert(current_timestamp, cols);
+  cols += X.dof(current_timestamp);
+
+  // Features
+  std::vector<uint> feature_ids;
+  for (const auto& id : ids)
+  {
+    feature_ids.push_back(id);
+    MSCEqFState::MSCEqFStateKey key(id);
+    cols_map_.insert(key, cols);
+    cols += X.dof(key);
+  }
+
+  // Alloc C and delta
+  size_t rows = feature_ids.size() * ph_->block_rows();
+  MatrixX C = MatrixX::Zero(rows, cols);
+  VectorX delta = VectorX::Zero(rows);
+
+  update_ids_.clear();
+  total_size_ = 0;
+
+  // Fill C and delta
+  for (const auto& id : feature_ids)
+  {
+    if (tracks.find(id) == tracks.end())
+    {
+      continue;
+    }
+    const auto& track = tracks.at(id);
+    if (track.timestamps_.back() != current_timestamp)
+    {
+      continue;
+    }
+
+    const auto& uv = track.uvs_.back();
+    const auto& uvn = track.normalized_uvs_.back();
+
+    Vector3 dummy_Af = Vector3::Zero();
+    FeatHelper feat(dummy_Af, Vector2(uv.x, uv.y), Vector2(uvn.x, uvn.y), current_timestamp, current_timestamp);
+
+    const auto& row_idx = total_size_;
+
+    // Jacobian
+    ph_->slamJacobianBlock(X, xi0_, feat, id, C.middleRows(row_idx, ph_->block_rows()),
+                           delta.middleRows(row_idx, ph_->block_rows()), cols_map_);
+
+    // Chi2 Test
+    const auto& C_block = C.middleRows(row_idx, ph_->block_rows());
+    const auto& delta_block = delta.middleRows(row_idx, ph_->block_rows());
+
+    std::vector<MSCEqFState::MSCEqFKey> keys;
+    if (X.opts().enable_camera_intrinsics_calibration_)
+    {
+      keys.push_back(MSCEqFStateElementName::L);
+    }
+    keys.push_back(current_timestamp);
+    keys.push_back(MSCEqFState::MSCEqFStateKey(id));
+
+    MatrixX C_i_compact(ph_->block_rows(), 0);
+    size_t compact_cols = 0;
+    for (const auto& key : keys)
+    {
+      compact_cols += X.dof(key);
+    }
+    C_i_compact.resize(ph_->block_rows(), compact_cols);
+
+    size_t cur_col = 0;
+    for (const auto& key : keys)
+    {
+      size_t dof = X.dof(key);
+      C_i_compact.middleCols(cur_col, dof) = C_block.middleCols(cols_map_.at(key), dof);
+      cur_col += dof;
+    }
+
+    MatrixX S = C_i_compact * X.subCov(keys) * C_i_compact.transpose();
+    S.diagonal() += VectorX::Ones(S.rows()) * opts_.pixel_std_ * opts_.pixel_std_;
+
+    fp chi2 = delta_block.dot(S.llt().solve(delta_block));
+
+    if (!UpdaterHelper::chi2Test(chi2, ph_->block_rows(), chi2_table_))
+    {
+      utils::Logger::debug("Chi2 test failed for SLAM feature id: " + std::to_string(id));
+      continue;
+    }
+
+    total_size_ += ph_->block_rows();
+    update_ids_.push_back(id);
+  }
+
+  if (update_ids_.empty())
+  {
+    ids.clear();
+    return;
+  }
+
+  // Filter ids
+  std::unordered_set<uint> successful_ids(update_ids_.begin(), update_ids_.end());
+  for (auto it = ids.begin(); it != ids.end();)
+  {
+    if (successful_ids.find(*it) == successful_ids.end())
+    {
+      it = ids.erase(it);
+    }
+    else
+    {
+      ++it;
+    }
+  }
+
+  // Resize
+  delta.conservativeResize(total_size_);
+  C.conservativeResize(total_size_, C.cols());
+
+  if (C.rows() > C.cols())
+  {
+    UpdaterHelper::updateQRCompression(C, delta);
+  }
+
+  MatrixX R = MatrixX::Identity(C.rows(), C.rows()) * opts_.pixel_std_ * opts_.pixel_std_;
+  UpdateMSCEqF(X, C, delta, R);
+}
+
+std::unordered_set<uint> Updater::initializePersistentFeatures(MSCEqFState& X, SystemState& xi0, const Tracks& tracks,
+                                                               const std::unordered_set<uint>& candidate_ids)
+{
+  std::unordered_set<uint> initialized_ids;
+
+  for (const auto& id : candidate_ids)
+  {
+    if (tracks.find(id) == tracks.end())
+    {
+      continue;
+    }
+    const auto& track = tracks.at(id);
+
+    // Triangulate
+    const auto& A_E = X.clone(track.timestamps_.front());
+    Vector3 A_f = Vector3::Zero();
+
+    if (!linearTriangulation(X, track, A_E, A_f))
+    {
+      continue;
+    }
+
+    if (opts_.refine_traingulation_)
+    {
+      nonlinearTriangulation(X, track, A_E, A_f);
+    }
+
+    // A_f is feature in Anchor Frame (A_E). A_E = T_wc (Camera Pose).
+    Vector3 f_global = A_E * A_f;
+
+    // Initialize SystemState (xi0) with feature
+    xi0.addFeature(id, f_global);
+
+    // Initialize MSCEqFState (X) with Identity SOT3 (dof 4)
+    Matrix4 cov = Matrix4::Identity() * 0.1;
+    X.initializeStateElement(id, cov);
+
+    initialized_ids.insert(id);
+    utils::Logger::info("Initialized persistent feature id: " + std::to_string(id));
+  }
+
+  return initialized_ids;
+}
+
 bool Updater::linearTriangulation(const MSCEqFState& X, const Track& track, const SE3& A_E, Vector3& A_f) const
 {
   Matrix3 A = Matrix3::Zero();

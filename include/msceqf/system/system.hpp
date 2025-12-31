@@ -162,6 +162,14 @@ class SystemState
   [[nodiscard]] const Vector3 ge3() const;
 
   /**
+   * @brief Add a persistent feature to the system state.
+   *
+   * @param feat_id Id of the feature
+   * @param feat_pos Position of the feature (in origin/global frame)
+   */
+  void addFeature(const uint& feat_id, const Vector3& feat_pos);
+
+  /**
    * @brief Get the state options
    *
    * @return State options

@@ -91,6 +91,25 @@ class ProjectionHelper
                                      const ColsMap& cols_map) = 0;
 
   /**
+   * @brief Computes a block row of the C matrix and a block of the residual, corresponding to the given persistent feature
+   *
+   * @param X MSCEqF state
+   * @param xi0 System state origin
+   * @param feat Feature helper
+   * @param feat_id Feature id
+   * @param C_block_row Block row of the C matrix
+   * @param delta_block_row Block of the residual delta
+   * @param cols_map Map of indices for the C matrix and the residual delta
+   */
+  virtual void slamJacobianBlock(const MSCEqFState& X,
+                                 const SystemState& xi0,
+                                 const FeatHelper& feat,
+                                 const uint& feat_id,
+                                 MatrixXBlockRowRef C_block_row,
+                                 VectorXBlockRowRef delta_block_row,
+                                 const ColsMap& cols_map) = 0;
+
+  /**
    * @brief Get the number of rows of a C matrix block and a residual block
    *
    * @return rows of a single block of the C matrix and the residual
@@ -165,6 +184,25 @@ class ProjectionHelperS2 : public ProjectionHelper
                              VectorXBlockRowRef delta_block_row,
                              MatrixXBlockRowRef Cf_block_row,
                              const ColsMap& cols_map) override;
+
+  /**
+   * @brief Computes a block row of the C matrix and a block of the residual, corresponding to the given persistent feature
+   *
+   * @param X MSCEqF state
+   * @param xi0 System state origin
+   * @param feat Feature helper
+   * @param feat_id Feature id
+   * @param C_block_row Block row of the C matrix
+   * @param delta_block_row Block of the residual delta
+   * @param cols_map Map of indices for the C matrix and the residual delta
+   */
+  void slamJacobianBlock(const MSCEqFState& X,
+                         const SystemState& xi0,
+                         const FeatHelper& feat,
+                         const uint& feat_id,
+                         MatrixXBlockRowRef C_block_row,
+                         VectorXBlockRowRef delta_block_row,
+                         const ColsMap& cols_map) override;
 };
 
 /**
@@ -214,6 +252,25 @@ class ProjectionHelperZ1 : public ProjectionHelper
                              VectorXBlockRowRef delta_block_row,
                              MatrixXBlockRowRef Cf_block_row,
                              const ColsMap& cols_map) override;
+
+  /**
+   * @brief Computes a block row of the C matrix and a block of the residual, corresponding to the given persistent feature
+   *
+   * @param X MSCEqF state
+   * @param xi0 System state origin
+   * @param feat Feature helper
+   * @param feat_id Feature id
+   * @param C_block_row Block row of the C matrix
+   * @param delta_block_row Block of the residual delta
+   * @param cols_map Map of indices for the C matrix and the residual delta
+   */
+  void slamJacobianBlock(const MSCEqFState& X,
+                         const SystemState& xi0,
+                         const FeatHelper& feat,
+                         const uint& feat_id,
+                         MatrixXBlockRowRef C_block_row,
+                         VectorXBlockRowRef delta_block_row,
+                         const ColsMap& cols_map) override;
 };
 
 using ProjectionHelperSharedPtr = std::shared_ptr<ProjectionHelper>;
